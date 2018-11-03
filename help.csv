@@ -1,0 +1,5 @@
+pin,"Save previous message: pin <name of message>"
+get,"Get message by name: get <name of message>"
+delete,"Delete a message by name: delete <name of message>"
+getall,"Get all saved messages"
+wolfram,"Evaluate a mathematical expression with Wolfram Alpha: wolfram <expression>"
