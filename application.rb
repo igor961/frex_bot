@@ -38,8 +38,19 @@ Telegram::Bot::Client.run token do |bot|
 		case message
 		when Telegram::Bot::Types::Message
 			unless message.text.nil?
-				m_arr = message.text.split(' ', 2)
-				puts m_arr
+				m_text = message.text
+				igor_arr = %w(игор igor)
+				igor_arr.each {|v|
+					if m_text.downcase.include? v then
+						puts m_text
+						# Any interface
+						f_res = firebase.set("igor_messages/#{message.chat.id}/#{message.message_id}", :content => m_text)
+						puts f_res.body
+						break
+					end
+				}
+				m_arr = m_text.split(' ', 2)
+				#puts m_arr
 				case m_arr[0]
 				when 'pin'
 					f_res = firebase.push("pinned_messages/#{message.chat.id}/#{m_arr[1]}", (message.message_id - 1))
@@ -78,25 +89,23 @@ Telegram::Bot::Client.run token do |bot|
 					rescue Exception => e
 						puts e
 					end
-		#		when 'wolfram'
-		#			begin
-		#				wolfram = Wolfram.new m_arr[1]
-		#				res = wolfram.get
-		#			rescue Exception => e
-		#				puts e
-		#			end
-		#			doc = Nokogiri::XML(res)
-		#			protofields = {
-		#				'primary' => 'true',
-		#				'title' => 'Plot'
-		#			}
-		#			fields = get_fields(protofields, doc)
-		#			send_photo fields['primary_true'], "Result", bot, message
-		#			send_photo fields['title_plot'], "Plot", bot, message
+					#		when 'wolfram'
+					#			begin
+					#				wolfram = Wolfram.new m_arr[1]
+					#				res = wolfram.get
+					#			rescue Exception => e
+					#				puts e
+					#			end
+					#			doc = Nokogiri::XML(res)
+					#			protofields = {
+					#				'primary' => 'true',
+					#				'title' => 'Plot'
+					#			}
+					#			fields = get_fields(protofields, doc)
+					#			send_photo fields['primary_true'], "Result", bot, message
+					#			send_photo fields['title_plot'], "Plot", bot, message
 				end
 			end
 		end
 	end
 end
-
-
