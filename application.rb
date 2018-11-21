@@ -1,5 +1,6 @@
 require 'telegram/bot'
 require 'firebase'
+require 'date'
 require 'nokogiri'
 require 'csv'
 require_relative 'app_config'
@@ -44,7 +45,9 @@ Telegram::Bot::Client.run token do |bot|
 					if m_text.downcase.include? v then
 						puts m_text
 						# Any interface
-						f_res = firebase.set("igor_messages/#{message.chat.id}/#{message.message_id}", :content => m_text)
+						cur_time = DateTime.now
+						f_res = firebase.set("igor_messages/#{message.chat.id}/messages/#{message.message_id}", :content => m_text, :d_t => cur_time.strftime("%d/%m/%Y %H:%M"), :sender => message.from.first_name, :timestamp => cur_time)
+						firebase.set "igor_messages/#{message.chat.id}/info/", :title => message.chat.title
 						puts f_res.body
 						break
 					end
