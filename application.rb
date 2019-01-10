@@ -12,6 +12,12 @@ db_uri = AppConfig::config['DB_URI']
 
 firebase = Firebase::Client.new db_uri
 
+class String
+	def numeric?
+		true if Float(self) rescue false
+	end
+end
+
 def send_photo(field, caption, bot, message)
 	unless field.nil?
 		begin
@@ -39,7 +45,20 @@ def get_path_to_message(str)
 	if category.nil? then	
 		Proc.new.call name
 	else
-		Proc.new.call "categories/#{category}/#{name}"
+		if category.numeric?
+			return false
+		else
+			Proc.new.call "categories/#{category}/#{name}"
+		end
+	end
+	return true
+end
+
+def basic_rescue
+	begin
+		yield	
+	rescue Exception => e
+		puts e
 	end
 end
 
@@ -65,13 +84,14 @@ Telegram::Bot::Client.run token do |bot|
 				#puts m_arr
 				case m_arr[0]
 				when 'pin'
-					get_path_to_message(m_arr[1]) {	|str| 
+					res = get_path_to_message(m_arr[1]) {	|str| 
 						f_res = firebase.push("pinned_messages/#{message.chat.id}/#{str}", (message.message_id - 1))
 						puts f_res.body
 					}
-					bot.api.send_message chat_id: message.chat.id, text: "Pinned"
+					if res then bot.api.send_message chat_id: message.chat.id, text: "Pinned"
+					else bot.api.send_message chat_id: message.chat.id, text: "Please, do not use numeric names of categories" end
 				when 'get'
-					get_path_to_message(m_arr[1]) {	|str|
+					res = get_path_to_message(m_arr[1]) {	|str|
 						msg_id = firebase.get("pinned_messages/#{message.chat.id}/#{str}")
 						puts msg_id.raw_body
 						unless msg_id.body.nil?
@@ -84,7 +104,7 @@ Telegram::Bot::Client.run token do |bot|
 								end
 							end
 						end
-					}
+					}					
 				when 'delete'
 					get_path_to_message(m_arr[1]) { |str|
 						if firebase.delete "pinned_messages/#{message.chat.id}/#{str}"
@@ -95,22 +115,26 @@ Telegram::Bot::Client.run token do |bot|
 					help_lines = CSV.read(File.expand_path("../help.csv", __FILE__))
 					get_couple = Proc.new {|k, v| "***#{k}*** - _#{v}_"}
 					# puts help_lines
-					begin
+					basic_rescue	{		
 						bot.api.send_message chat_id: message.chat.id, text: help_lines.map(&get_couple).join("\n\n"), parse_mode: "MARKDOWN" unless help_lines.nil?
-					rescue Exception => e
-						puts e
-					end
+					}	
+				when 'getcat'
+					categories = firebase.get("pinned_messages/#{message.chat.id}/categories", {"print" => "pretty"})
+					puts categories.raw_body
+					get_text = Proc.new {|k, v| "<i>#{k}</i>"}
+					basic_rescue {	
+						bot.api.send_message chat_id: message.chat.id, text: categories.body.map(&get_text).join("\n"), parse_mode: "HTML"
+					}					
 				when 'getall'
 					all_messages = (m_arr[1].nil?) \
-				 		? firebase.get("pinned_messages/#{message.chat.id}/") \
+						? firebase.get("pinned_messages/#{message.chat.id}/", {"print" => "pretty"}) \
 						: firebase.get("pinned_messages/#{message.chat.id}/categories/#{m_arr[1]}")
 					get_text = Proc.new {|k, v| "<i>#{k}</i>" unless k == "categories"}
-					puts all_messages.body
-					begin
+					puts all_messages.raw_body
+
+					basic_rescue {
 						bot.api.send_message chat_id: message.chat.id, text: all_messages.body.map(&get_text).join("\n"), parse_mode: "HTML"
-					rescue Exception => e
-						puts e
-					end
+					}
 					#		when 'wolfram'
 					#			begin
 					#				wolfram = Wolfram.new m_arr[1]
@@ -131,3 +155,4 @@ Telegram::Bot::Client.run token do |bot|
 		end
 	end
 end
+
