@@ -34,6 +34,15 @@ def get_fields(arr, doc)
 	res
 end
 
+def get_path_to_message(str)
+	name, category = str.delete(' ').split(':', 2) unless str.nil?
+	if category.nil? then	
+		Proc.new.call name
+	else
+		Proc.new.call "categories/#{category}/#{name}"
+	end
+end
+
 Telegram::Bot::Client.run token do |bot|
 	bot.listen do |message|
 		case message
@@ -56,24 +65,32 @@ Telegram::Bot::Client.run token do |bot|
 				#puts m_arr
 				case m_arr[0]
 				when 'pin'
-					f_res = firebase.push("pinned_messages/#{message.chat.id}/#{m_arr[1]}", (message.message_id - 1))
-					puts f_res.body
+					get_path_to_message(m_arr[1]) {	|str| 
+						f_res = firebase.push("pinned_messages/#{message.chat.id}/#{str}", (message.message_id - 1))
+						puts f_res.body
+					}
 					bot.api.send_message chat_id: message.chat.id, text: "Pinned"
 				when 'get'
-					msg_id = firebase.get("pinned_messages/#{message.chat.id}/#{m_arr[1]}")
-					puts msg_id.raw_body
-					unless msg_id.body.nil?
-						msg_id.body.each do |k, v|
-							begin
-								bot.api.forward_message chat_id: message.chat.id, from_chat_id: message.chat.id, message_id: v
-							rescue Telegram::Bot::Exceptions::ResponseError => e
-								puts e.message
-								bot.api.send_message chat_id: message.chat.id, text: e.message
+					get_path_to_message(m_arr[1]) {	|str|
+						msg_id = firebase.get("pinned_messages/#{message.chat.id}/#{str}")
+						puts msg_id.raw_body
+						unless msg_id.body.nil?
+							msg_id.body.each do |k, v|
+								begin
+									bot.api.forward_message chat_id: message.chat.id, from_chat_id: message.chat.id, message_id: v
+								rescue Telegram::Bot::Exceptions::ResponseError => e
+									puts e.message
+									bot.api.send_message chat_id: message.chat.id, text: e.message
+								end
 							end
 						end
-					end
+					}
 				when 'delete'
-					bot.api.send_message chat_id: message.chat.id, text: "OK" if firebase.delete "pinned_messages/#{message.chat.id}/#{m_arr[1]}"
+					get_path_to_message(m_arr[1]) { |str|
+						if firebase.delete "pinned_messages/#{message.chat.id}/#{str}"
+							bot.api.send_message chat_id: message.chat.id, text: "OK"
+						end
+					}
 				when 'help'
 					help_lines = CSV.read(File.expand_path("../help.csv", __FILE__))
 					get_couple = Proc.new {|k, v| "***#{k}*** - _#{v}_"}
@@ -84,8 +101,10 @@ Telegram::Bot::Client.run token do |bot|
 						puts e
 					end
 				when 'getall'
-					all_messages = firebase.get "pinned_messages/#{message.chat.id}"
-					get_text = Proc.new {|k, v| "<i>#{k}</i>"}
+					all_messages = (m_arr[1].nil?) \
+				 		? firebase.get("pinned_messages/#{message.chat.id}/") \
+						: firebase.get("pinned_messages/#{message.chat.id}/categories/#{m_arr[1]}")
+					get_text = Proc.new {|k, v| "<i>#{k}</i>" unless k == "categories"}
 					puts all_messages.body
 					begin
 						bot.api.send_message chat_id: message.chat.id, text: all_messages.body.map(&get_text).join("\n"), parse_mode: "HTML"
