@@ -1,16 +1,16 @@
 require 'telegram/bot'
-require 'firebase'
 require 'date'
 require 'nokogiri'
 require 'csv'
 require_relative 'app_config'
 require_relative 'wolfram'
+require_relative 'firebase_store'
 
 token = AppConfig::config["TELEGRAM_TOKEN"]
 
 db_uri = AppConfig::config['DB_URI']
 
-firebase = Firebase::Client.new db_uri
+store = FirebaseStore.new db_uri
 
 class String
 	def numeric?
@@ -74,8 +74,10 @@ Telegram::Bot::Client.run token do |bot|
 						puts m_text
 						# Any interface
 						cur_time = DateTime.now
-						f_res = firebase.set("igor_messages/#{message.chat.id}/messages/#{message.message_id}", :content => m_text, :d_t => cur_time.strftime("%d/%m/%Y %H:%M"), :sender => message.from.first_name, :timestamp => cur_time)
-						firebase.set "igor_messages/#{message.chat.id}/info/", :title => message.chat.title
+						f_res = store.set("igor_messages/#{message.chat.id}/messages/#{message.message_id}", 
+															:content => m_text, :d_t => cur_time.strftime("%d/%m/%Y %H:%M"), 
+															:sender => message.from.first_name, :timestamp => cur_time)
+						store.set "igor_messages/#{message.chat.id}/info/", :title => message.chat.title
 						puts f_res.body
 						break
 					end
@@ -84,15 +86,17 @@ Telegram::Bot::Client.run token do |bot|
 				#puts m_arr
 				case m_arr[0]
 				when 'pin'
-					res = get_path_to_message(m_arr[1]) {	|str| 
-						f_res = firebase.push("pinned_messages/#{message.chat.id}/#{str}", (message.message_id - 1))
+					res = get_path_to_message(m_arr[1]) do |str| 
+						f_res = store.push("pinned_messages/#{message.chat.id}/#{str}", (message.message_id - 1))
 						puts f_res.body
-					}
+					end
 					if res then bot.api.send_message chat_id: message.chat.id, text: "Pinned"
-					else bot.api.send_message chat_id: message.chat.id, text: "Please, do not use numeric names of categories" end
+					else bot.api.send_message(chat_id: message.chat.id, 
+																		text: "Please, do not use numeric names of categories")
+					end
 				when 'get'
-					res = get_path_to_message(m_arr[1]) {	|str|
-						msg_id = firebase.get("pinned_messages/#{message.chat.id}/#{str}")
+					res = get_path_to_message(m_arr[1]) do |str|
+						msg_id = store.get("pinned_messages/#{message.chat.id}/#{str}")
 						puts msg_id.raw_body
 						unless msg_id.body.nil?
 							msg_id.body.each do |k, v|
@@ -103,14 +107,14 @@ Telegram::Bot::Client.run token do |bot|
 									bot.api.send_message chat_id: message.chat.id, text: e.message
 								end
 							end
-						end
-					}					
+						end#end_unless
+					end					
 				when 'delete'
-					get_path_to_message(m_arr[1]) { |str|
-						if firebase.delete "pinned_messages/#{message.chat.id}/#{str}"
+					get_path_to_message(m_arr[1]) do |str|
+						if store.delete "pinned_messages/#{message.chat.id}/#{str}"
 							bot.api.send_message chat_id: message.chat.id, text: "OK"
 						end
-					}
+					end
 				when 'help'
 					help_lines = CSV.read(File.expand_path("../help.csv", __FILE__))
 					get_couple = Proc.new {|k, v| "***#{k}*** - _#{v}_"}
@@ -119,7 +123,7 @@ Telegram::Bot::Client.run token do |bot|
 						bot.api.send_message chat_id: message.chat.id, text: help_lines.map(&get_couple).join("\n\n"), parse_mode: "MARKDOWN" unless help_lines.nil?
 					}	
 				when 'getcat'
-					categories = firebase.get("pinned_messages/#{message.chat.id}/categories", {"print" => "pretty"})
+					categories = store.get("pinned_messages/#{message.chat.id}/categories")
 					puts categories.raw_body
 					get_text = Proc.new {|k, v| "<i>#{k}</i>"}
 					basic_rescue {	
@@ -127,8 +131,8 @@ Telegram::Bot::Client.run token do |bot|
 					}					
 				when 'getall'
 					all_messages = (m_arr[1].nil?) \
-						? firebase.get("pinned_messages/#{message.chat.id}/", {"print" => "pretty"}) \
-						: firebase.get("pinned_messages/#{message.chat.id}/categories/#{m_arr[1]}")
+						? store.get("pinned_messages/#{message.chat.id}/") \
+						: store.get("pinned_messages/#{message.chat.id}/categories/#{m_arr[1]}")
 					get_text = Proc.new {|k, v| "<i>#{k}</i>" unless k == "categories"}
 					puts all_messages.raw_body
 
