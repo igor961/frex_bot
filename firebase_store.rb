@@ -21,4 +21,8 @@ class FirebaseStore
 		@firebase.push where, what
 	end
 
+	def set where='', what={}, pretty=true
+		if pretty then return @firebase.set where, what, {"print" => "pretty"} end
+		@firebase.set where, what
+	end
 end
