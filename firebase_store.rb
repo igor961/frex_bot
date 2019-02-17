@@ -26,3 +26,4 @@ class FirebaseStore
 		@firebase.set where, what
 	end
 end
+
