@@ -22,6 +22,7 @@ module AppConfig
             return val.strip if f_key == key
           end
         end
+        nil
       }
     end
   end
