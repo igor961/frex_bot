@@ -100,7 +100,7 @@ Telegram::Bot::Client.run token do |bot|
         #puts m_arr
         case m_arr[0]
         when 'pin'
-          unless m_arr[1].nil?
+          if !m_arr[1].nil? and (m_arr[1] =~ /[^A-Za-z0-9]/).nil?
             res = get_path_to_message(m_arr[1]) do |str| 
               f_res = store.push("pinned_messages/#{message.chat.id}/#{str}", (message.message_id - 1))
               puts f_res.body
