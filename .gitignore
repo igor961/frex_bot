@@ -1,3 +1,4 @@
-/.vscode/*
-/.idea/*
-/Gemfile.lock
+.vscode
+.idea
+Gemfile.lock
+*.env

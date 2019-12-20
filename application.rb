@@ -6,11 +6,15 @@ require_relative 'app_config'
 require_relative 'wolfram'
 require_relative 'firebase_store'
 
-token = AppConfig::config["TELEGRAM_TOKEN"]
+token = AppConfig::config['TELEGRAM_TOKEN']
 
 db_uri = AppConfig::config['DB_URI']
 
+puts "DB_URI: " << db_uri unless db_uri.nil?
+
 store = FirebaseStore.new db_uri
+
+puts "Token: " << token unless token.nil?
 
 class String
   def numeric?
@@ -62,26 +66,36 @@ def basic_rescue
   end
 end
 
+def store_chat_msg(store, chat_id, message_id, sender, content, title, time)
+  store.set("all_messages/#{chat_id}/messages/#{message_id}", 
+            :content => content, :d_t => time.strftime("%d/%m/%Y %H:%M"), 
+            :sender => sender, :timestamp => time)
+  store.set "all_messages/#{chat_id}/info/", :title => title
+end
+
 Telegram::Bot::Client.run token do |bot|
   bot.listen do |message|
     case message
     when Telegram::Bot::Types::Message
       unless message.text.nil?
         m_text = message.text
+        cur_time = DateTime.now
+        cur_time_f = cur_time.strftime("%d/%m/%Y %H:%M")
         igor_arr = %w(игор igor)
         igor_arr.each {|v|
           if m_text.downcase.include? v then
             puts m_text
             # Any interface
-            cur_time = DateTime.now
             f_res = store.set("igor_messages/#{message.chat.id}/messages/#{message.message_id}", 
-                              :content => m_text, :d_t => cur_time.strftime("%d/%m/%Y %H:%M"), 
+                              :content => m_text, :d_t => cur_time_f, 
                               :sender => message.from.first_name, :timestamp => cur_time)
-            store.set "igor_messages/#{message.chat.id}/info/", :title => message.chat.title
+            store.set "igor_messages/#{message.chat.id}/info/", :title => "#{message.chat.title} - for Igor"
             puts f_res.body
             break
           end
         }
+        store_chat_msg store, message.chat.id, message.message_id, message.from.first_name, m_text, message.chat.title, cur_time 
+        #####################################################
         m_arr = m_text.strip.split(' ', 2)
         #puts m_arr
         case m_arr[0]

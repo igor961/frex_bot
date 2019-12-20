@@ -1,5 +1,5 @@
 task default: %w[run]
 
 task :run do
-    ruby "application.rb"
+  ruby "application.rb"
 end
