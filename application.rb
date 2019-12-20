@@ -5,6 +5,7 @@ require 'csv'
 require_relative 'app_config'
 require_relative 'wolfram'
 require_relative 'firebase_store'
+require_relative 'message_catcher'
 
 token = AppConfig::config['TELEGRAM_TOKEN']
 
@@ -15,6 +16,9 @@ puts "DB_URI: " << db_uri unless db_uri.nil?
 store = FirebaseStore.new db_uri
 
 puts "Token: " << token unless token.nil?
+message_catcher = nil
+
+message_catcher = MessageCatcher.new if AppConfig::config['CATCH']
 
 class String
   def numeric?
@@ -82,19 +86,17 @@ Telegram::Bot::Client.run token do |bot|
         cur_time = DateTime.now
         cur_time_f = cur_time.strftime("%d/%m/%Y %H:%M")
         igor_arr = %w(игор igor)
-        igor_arr.each {|v|
-          if m_text.downcase.include? v then
-            puts m_text
+        unless message_catcher.nil? then
+          message_catcher.catch(igor_arr, m_text) {
             # Any interface
             f_res = store.set("igor_messages/#{message.chat.id}/messages/#{message.message_id}", 
                               :content => m_text, :d_t => cur_time_f, 
                               :sender => message.from.first_name, :timestamp => cur_time)
             store.set "igor_messages/#{message.chat.id}/info/", :title => "#{message.chat.title} - for Igor"
             puts f_res.body
-            break
-          end
-        }
-        store_chat_msg store, message.chat.id, message.message_id, message.from.first_name, m_text, message.chat.title, cur_time 
+          } 
+          store_chat_msg store, message.chat.id, message.message_id, message.from.first_name, m_text, message.chat.title, cur_time 
+        end
         #####################################################
         m_arr = m_text.strip.split(' ', 2)
         #puts m_arr
