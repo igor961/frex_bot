@@ -18,7 +18,8 @@ store = FirebaseStore.new db_uri
 puts "Token: " << token unless token.nil?
 message_catcher = nil
 
-message_catcher = MessageCatcher.new if AppConfig::config['CATCH']
+message_catcher = MessageCatcher.new if AppConfig::config['CATCH'] == true
+puts message_catcher
 
 class String
   def numeric?
